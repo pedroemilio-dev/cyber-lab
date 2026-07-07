@@ -8,10 +8,11 @@ from analyzer.detector import detect
 from analyzer.reporter import generate
 
 def main():
+    sys.stdout.reconfigure(line_buffering=True)
     args = _parse_args()
 
     if args.live:
-        _live_mode(args.log, args.format)
+        _live_mode(args.log, args.format, args.from_start)
     else:
         _batch_mode(args.log, args.format)
 
@@ -38,24 +39,26 @@ def _batch_mode(log_path: str, fmt: str):
     print(f"[+] Report saved to {report_path}")
 
 
-def _live_mode(log_path: str, fmt: str):
-    from collections import defaultdict
+def _live_mode(log_path: str, fmt: str, from_start: bool = False):
     from datetime import timedelta
-    from analyzer.spring_parser import parse_file as spring_parse_file
 
     print(f"\n[*] Watching log file: {log_path}")
-    print(f"[*] Waiting for new entries... (Ctrl+C to stop)\n")
+    if from_start:
+        print(f"[*] Analyzing existing content, then following new entries... (Ctrl+C to stop)\n")
+    else:
+        print(f"[*] Waiting for new entries... (Ctrl+C to stop)\n")
 
-    auth_failures = defaultdict(list)
-    not_found     = defaultdict(list)
-    alerted_ips   = set()
-
-    BRUTE_FORCE_THRESHOLD = 10
-    SCAN_THRESHOLD        = 20
-    WINDOW                = timedelta(seconds=60)
+    rolling_window = []
+    alerts_by_key  = {}
+    WINDOW         = timedelta(minutes=5)
 
     if fmt == "spring":
         processed = 0
+        if not from_start:
+            try:
+                processed = len(spring_parse_file(log_path))
+            except Exception:
+                processed = 0
         while True:
             try:
                 all_entries = spring_parse_file(log_path)
@@ -67,13 +70,13 @@ def _live_mode(log_path: str, fmt: str):
             processed = len(all_entries)
 
             for entry in new_entries:
-                _process_entry(entry, auth_failures, not_found, alerted_ips,
-                            BRUTE_FORCE_THRESHOLD, SCAN_THRESHOLD, WINDOW)
+                _process_entry(entry, rolling_window, alerts_by_key, WINDOW)
 
             time.sleep(1)
     else:
         with open(log_path, "r") as f:
-            f.seek(0, 2)
+            if not from_start:
+                f.seek(0, 2)
             while True:
                 line = f.readline()
                 if not line:
@@ -82,48 +85,27 @@ def _live_mode(log_path: str, fmt: str):
                 entry = parse_line(line.strip())
                 if not entry:
                     continue
-                _process_entry(entry, auth_failures, not_found, alerted_ips,
-                               BRUTE_FORCE_THRESHOLD, SCAN_THRESHOLD, WINDOW)
+                _process_entry(entry, rolling_window, alerts_by_key, WINDOW)
 
 
-def _process_entry(entry, auth_failures, not_found, alerted_ips,
-                   brute_threshold, scan_threshold, window):
-    alerts = detect([entry])
-    for alert in alerts:
-        if alert.attack_type not in ("Brute Force", "Vulnerability Scan"):
+def _process_entry(entry, rolling_window, alerts_by_key, window):
+    rolling_window.append(entry)
+    cutoff = entry.time - window
+    rolling_window[:] = [e for e in rolling_window if e.time >= cutoff]
+
+    for alert in detect(rolling_window):
+        key = (alert.attack_type, alert.ip)
+        existing = alerts_by_key.get(key)
+
+        if existing is None:
+            alerts_by_key[key] = alert
             print(f"  [!] [{alert.severity.upper()}] {alert.attack_type}")
             print(f"      IP     : {alert.ip}")
             print(f"      Detail : {alert.detail}")
             print()
-
-    if entry.status in (401, 403):
-        auth_failures[entry.ip].append(entry.time)
-        auth_failures[entry.ip] = [
-            t for t in auth_failures[entry.ip]
-            if entry.time - t <= window
-        ]
-        key = f"brute_{entry.ip}"
-        if len(auth_failures[entry.ip]) >= brute_threshold:
-            alerted_ips.add(key)
-            print(f"  [!] [HIGH] Brute Force")
-            print(f"      IP     : {entry.ip}")
-            print(f"      Detail : {len(auth_failures[entry.ip])} failed auth attempts in 60s")
-            print()
-            auth_failures[entry.ip] = []  
-
-    if entry.status == 404:
-        not_found[entry.ip].append(entry.time)
-        not_found[entry.ip] = [
-            t for t in not_found[entry.ip]
-            if entry.time - t <= window
-        ]
-        key = f"scan_{entry.ip}"
-        if len(not_found[entry.ip]) >= scan_threshold and key not in alerted_ips:
-            alerted_ips.add(key)
-            print(f"  [!] [MEDIUM] Vulnerability Scan")
-            print(f"      IP     : {entry.ip}")
-            print(f"      Detail : {len(not_found[entry.ip])} 404s in 60s")
-            print()
+        elif alert.count > existing.count:
+            alerts_by_key[key] = alert
+            print(f"      ^ {alert.attack_type} from {alert.ip} escalated to {alert.count}")
 
 
 def _parse_args():
@@ -145,6 +127,12 @@ def _parse_args():
         "--live",
         action="store_true",
         help="Live mode — monitor the log file in real time"
+    )
+    parser.add_argument(
+        "--from-start",
+        action="store_true",
+        help="Live mode: analyze existing file content first, then follow new entries "
+             "(default: only new entries appended after startup)"
     )
     return parser.parse_args()
 

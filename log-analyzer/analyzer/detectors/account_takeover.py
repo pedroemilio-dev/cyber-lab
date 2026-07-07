@@ -3,9 +3,8 @@ from datetime import timedelta
 
 from analyzer.models import LogEntry, Alert
 
-BRUTE_FORCE_EVENTS = {"FAILED_LOGIN"}
 WINDOW = timedelta(seconds=60)
-THRESHOLD = 10
+THRESHOLD = 5
 
 
 def detect(entries: list[LogEntry]) -> list[Alert]:
@@ -13,8 +12,12 @@ def detect(entries: list[LogEntry]) -> list[Alert]:
     ip_events = defaultdict(list)
 
     for entry in entries:
-        is_apache_match = entry.status in (401, 403) and entry.event_type is None
-        is_spring_match = entry.event_type in BRUTE_FORCE_EVENTS
+        is_apache_match = (
+            entry.method in ("PATCH", "POST", "PUT")
+            and "/users/me/password" in entry.path
+            and entry.status in (400, 401, 403)
+        )
+        is_spring_match = entry.event_type == "PASSWORD_CHANGE_FAILED"
 
         if is_apache_match or is_spring_match:
             ip_events[entry.ip].append(entry.time)
@@ -26,9 +29,9 @@ def detect(entries: list[LogEntry]) -> list[Alert]:
             if len(window_hits) >= THRESHOLD:
                 alerts.append(Alert(
                     ip=ip,
-                    attack_type="Brute Force",
+                    attack_type="Account Takeover Attempt",
                     severity="high",
-                    detail=f"{len(window_hits)} failed auth attempts in 60s",
+                    detail=f"{len(window_hits)} failed password-change attempts in 60s",
                     count=len(window_hits)
                 ))
                 break

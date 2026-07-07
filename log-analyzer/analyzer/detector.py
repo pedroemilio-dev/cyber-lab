@@ -11,6 +11,7 @@ from analyzer.detectors import (
     credential_attack,
     resource_enum,
     register_flood,
+    account_takeover,
 )
 
 
@@ -26,4 +27,5 @@ def detect(entries: list[LogEntry]) -> list[Alert]:
     alerts.extend(credential_attack.detect(entries))
     alerts.extend(resource_enum.detect(entries))
     alerts.extend(register_flood.detect(entries))
+    alerts.extend(account_takeover.detect(entries))
     return alerts

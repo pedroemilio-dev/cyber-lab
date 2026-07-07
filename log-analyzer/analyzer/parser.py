@@ -16,14 +16,17 @@ def parse_line(line: str) -> LogEntry | None:
     if not match:
         return None
 
-    return LogEntry(
-        ip=match.group("ip"),
-        time=datetime.strptime(match.group("time"), "%d/%b/%Y:%H:%M:%S %z"),
-        method=match.group("method"),
-        path=match.group("path"),
-        status=int(match.group("status")),
-        bytes=int(match.group("bytes")) if match.group("bytes") != "-" else 0,
-    )
+    try:
+        return LogEntry(
+            ip=match.group("ip"),
+            time=datetime.strptime(match.group("time"), "%d/%b/%Y:%H:%M:%S %z"),
+            method=match.group("method"),
+            path=match.group("path"),
+            status=int(match.group("status")),
+            bytes=int(match.group("bytes")) if match.group("bytes") != "-" else 0,
+        )
+    except ValueError:
+        return None
 
 
 def parse_file(path: str) -> list[LogEntry]:
