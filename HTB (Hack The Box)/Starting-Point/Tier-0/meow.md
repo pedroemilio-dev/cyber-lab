@@ -43,7 +43,7 @@ Gaining unauthorized root access to the target machine and capturing the proof-o
 We start by running a basic port scan to identify open ports and services running on the target.
 
 ```bash
-nmap 10.129.137.168
+nmap 10.129.138.45
 ```
 
 ![Nmap Scan Result](Images/Nmap%20Scan.png)
