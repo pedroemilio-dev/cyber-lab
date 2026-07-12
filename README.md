@@ -12,9 +12,20 @@ Welcome to my cybersecurity lab. This repository is used to document my hands-on
 ---
 
 ## 📈 Current Progress
+- [ ] HTB Starting Point - Tier 0
+  <details>
+  <summary>Click to expand machines</summary>
+  
+    - [x] HTB Starting Point — Meow
+    - [ ] HTB Starting Point — Fawn
+    - [ ] HTB Starting Point — Dancing
+    - [ ] HTB Starting Point — Redeemer
+    - [ ] HTB Starting Point — Explosion
+    - [ ] HTB Starting Point — Preignition
+    - [ ] HTB Starting Point — Mongod
+    - [ ] HTB Starting Point — Synced
+  </details>
 
-- [x] HTB Starting Point — Meow
-- [ ] HTB Starting Point — Fawn
 - [ ] HTB Certified SOC Analyst Path
   <details>
   <summary><i>Click to expand modules</i></summary>
