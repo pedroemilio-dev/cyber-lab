@@ -85,7 +85,7 @@ We downloaded the file using `get flag.txt` and opened it with Pluma to retrieve
 
 ![Retrieving Flag](Images/Check%20Flag.png)
 
-**Flag Secured:** `15f61c10dfbc77a704d76016a22f1664`
+**Flag Secured:** ✅
 
 ---
 
